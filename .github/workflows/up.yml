@@ -129,6 +129,57 @@ jobs:
           kubectl rollout status deployment/facturacion-back -n "$NAMESPACE" --timeout=15m
           kubectl rollout status deployment/facturacion-web -n "$NAMESPACE" --timeout=10m
 
+      - name: Verificar Flyway
+        run: |
+          set -euo pipefail
+          endpoint=$(jq -r '.rds_endpoint.value' "$RUNNER_TEMP/outputs.json")
+          db=$(jq -r '.rds_db_name.value' "$RUNNER_TEMP/outputs.json")
+          kubectl delete job flyway-check -n "$NAMESPACE" --ignore-not-found --wait=true
+          kubectl apply -n "$NAMESPACE" -f - <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: flyway-check
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 600
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: psql
+                    image: public.ecr.aws/docker/library/postgres:18-alpine
+                    env:
+                      - { name: PGHOST, value: "${endpoint%:*}" }
+                      - { name: PGPORT, value: "${endpoint##*:}" }
+                      - { name: PGDATABASE, value: "${db}" }
+                      - { name: PGSSLMODE, value: require }
+                      - name: PGUSER
+                        valueFrom: { secretKeyRef: { name: facturacion-db, key: username } }
+                      - name: PGPASSWORD
+                        valueFrom: { secretKeyRef: { name: facturacion-db, key: password } }
+                    command: ["sh", "-c"]
+                    args:
+                      - |
+                        set -e
+                        psql -v ON_ERROR_STOP=1 -c "SELECT installed_rank, version, description, installed_on, success FROM flyway_schema_history ORDER BY installed_rank"
+                        ok=\$(psql -At -c "SELECT count(*) FROM flyway_schema_history WHERE success")
+                        bad=\$(psql -At -c "SELECT count(*) FROM flyway_schema_history WHERE NOT success")
+                        echo "aplicadas=\$ok fallidas=\$bad"
+                        [ "\$bad" -eq 0 ] && [ "\$ok" -gt 0 ]
+          EOF
+          result=""
+          for _ in $(seq 1 60); do
+            result=$(kubectl get job flyway-check -n "$NAMESPACE" -o jsonpath='{.status.succeeded}{.status.failed}')
+            [[ -n "$result" ]] && break
+            sleep 5
+          done
+          logs=$(kubectl logs job/flyway-check -n "$NAMESPACE" 2>&1 || true)
+          echo "$logs"
+          { echo "### Flyway"; echo '```'; echo "$logs"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          [[ "$(kubectl get job flyway-check -n "$NAMESPACE" -o jsonpath='{.status.succeeded}')" == "1" ]] \
+            || { echo "::error::Flyway: migraciones fallidas, ninguna aplicada o no se pudo consultar RDS"; exit 1; }
+
       - name: Esperar ALB
         id: alb
         run: |

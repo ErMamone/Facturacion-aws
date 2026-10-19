@@ -96,7 +96,9 @@ Qué hace, en orden:
 2. `tofu apply` de `infra/env` con `allowed_cidrs` y `expires_at = ahora + ttl_hours`.
 3. Crea el Secret `facturacion-db` con usuario y password del secret de RDS.
 4. Genera el overlay de Kustomize con los outputs de tofu (`scripts/render-k8s.sh`) y aplica `k8s/`.
-5. Espera los rollouts, el ALB y que responda `/` y `/api`.
+5. Espera los rollouts.
+6. Verifica Flyway: un Job consulta `flyway_schema_history` en RDS y falla si hay migraciones fallidas o ninguna aplicada. La lista queda en el Summary.
+7. Espera el ALB y que responda `/` y `/api`.
 
 **Para extender el tiempo:** volvé a correr `up` con otro `ttl_hours`. `tofu apply` no cambia nada salvo el tag `expires-at`, y el deploy es idempotente.
 
