@@ -1,0 +1,121 @@
+# Chequeos estáticos de la infra: no toca AWS, no usa credenciales.
+# Corre en push a dev/prd y en PRs hacia dev/prd (flujo dev -> PR -> prd).
+name: infra-ci
+
+on:
+  push:
+    branches: [dev, prd]
+    paths:
+      - "infra/**"
+      - "k8s/**"
+      - "scripts/**"
+      - ".tflint.hcl"
+      - ".github/**"
+  pull_request:
+    branches: [dev, prd]
+    paths:
+      - "infra/**"
+      - "k8s/**"
+      - "scripts/**"
+      - ".tflint.hcl"
+      - ".github/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TOFU_VERSION: "1.13.1"
+  TFLINT_VERSION: "v0.64.0"
+  TRIVY_VERSION: "v0.75.0"
+
+jobs:
+  tofu:
+    name: fmt / validate / tflint (${{ matrix.stack }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [bootstrap, env]
+    defaults:
+      run:
+        working-directory: infra/${{ matrix.stack }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+          tofu_wrapper: false
+
+      - name: tofu fmt
+        run: tofu fmt -check -recursive -diff
+
+      - name: tofu init (sin backend)
+        run: tofu init -backend=false -input=false
+
+      - name: tofu validate
+        run: tofu validate
+
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: tflint
+        env:
+          # Evita el rate limit de la API de GitHub al bajar el plugin de AWS.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init --config="$GITHUB_WORKSPACE/.tflint.hcl"
+          tflint --config="$GITHUB_WORKSPACE/.tflint.hcl" --format=compact
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: shellcheck scripts/
+        run: shellcheck scripts/*.sh
+
+  k8s:
+    name: kustomize build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Renderiza el overlay con outputs de ejemplo y valida que kustomize lo arme.
+      - name: kustomize build
+        env:
+          ECR_REGISTRY: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+        run: |
+          cat > "$RUNNER_TEMP/outputs.json" <<'JSON'
+          {
+            "region": {"value": "us-east-1"},
+            "alb_security_group_id": {"value": "sg-0123456789abcdef0"},
+            "facturas_bucket": {"value": "facturacion-data-123456789012"},
+            "rds_endpoint": {"value": "facturacion.abc.us-east-1.rds.amazonaws.com:5432"},
+            "rds_db_name": {"value": "facturacion"},
+            "backend_irsa_role_arn": {"value": "arn:aws:iam::123456789012:role/facturacion-backend-x"}
+          }
+          JSON
+          scripts/render-k8s.sh "$RUNNER_TEMP/outputs.json"
+          kubectl kustomize k8s/overlays/demo
+
+  trivy:
+    name: trivy config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # TODO: por ahora solo reporta (exit-code 0). Después de la primera corrida,
+      # documentar en .trivyignore los hallazgos aceptados (endpoint EKS público,
+      # ALB abierto, etc.) y pasar exit-code a "1".
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infra
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+          version: ${{ env.TRIVY_VERSION }}

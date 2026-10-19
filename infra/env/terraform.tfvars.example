@@ -1,0 +1,9 @@
+# Copiar a terraform.tfvars (ignorado por git) y completar si hace falta.
+# Todas las variables tienen default; esto es solo para overrides.
+
+# Restringir el ALB a tu IP (default: abierto a todos).
+# allowed_cidrs = ["203.0.113.10/32"]
+
+# Si aplicás env desde tu máquina, tu principal IAM necesita admin del cluster
+# para que Helm pueda instalar el LB Controller.
+# admin_principal_arns = ["arn:aws:iam::123456789012:user/tu-usuario"]

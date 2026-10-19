@@ -1,0 +1,49 @@
+# Baja el entorno completo (doc 07). Environment `teardown`: sin aprobación,
+# limitado a la rama prd en la configuración del environment.
+name: down
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: env-demo
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TOFU_VERSION: "1.13.1"
+  KUBECTL_VERSION: v1.37.1
+
+jobs:
+  down:
+    runs-on: ubuntu-latest
+    environment: teardown
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-aws
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+          kubectl-version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Teardown
+        run: scripts/teardown.sh
+
+      - name: Resumen
+        if: always()
+        env:
+          RESULT: ${{ job.status }}
+        run: |
+          if [[ "$RESULT" == "success" ]]; then
+            echo "## Entorno destruido y sin huérfanos" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## El down falló: revisá el log y la consola de AWS (puede haber recursos cobrando)" >> "$GITHUB_STEP_SUMMARY"
+          fi

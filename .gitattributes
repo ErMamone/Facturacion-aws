@@ -1,0 +1,7 @@
+# Fin de línea LF para scripts e infra (bash falla con CRLF).
+* text=auto
+*.sh   text eol=lf
+*.tf   text eol=lf
+*.hcl  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf

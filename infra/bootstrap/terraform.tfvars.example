@@ -1,0 +1,9 @@
+# Copiar a terraform.tfvars (ignorado por git) y completar.
+alert_email = "tu-email@ejemplo.com"
+
+# Si AWS ya creó un monitor de anomalías por servicio en la cuenta:
+# create_anomaly_monitor       = false
+# existing_anomaly_monitor_arn = "arn:aws:ce::123456789012:anomalymonitor/..."
+
+# Cuenta nueva: Cost Explorer tarda hasta 24 h en activarse. Mientras tanto:
+# enable_anomaly_detection = false
