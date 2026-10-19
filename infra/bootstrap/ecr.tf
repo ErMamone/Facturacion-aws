@@ -1,5 +1,3 @@
-# Repositorios de imágenes. Viven en bootstrap para sobrevivir al destroy de env.
-
 locals {
   ecr_repos = toset(["back", "web"])
 }
@@ -18,7 +16,6 @@ resource "aws_ecr_repository" "this" {
   }
 }
 
-# ECR cobra por GB almacenado: se conservan solo las últimas N imágenes.
 resource "aws_ecr_lifecycle_policy" "this" {
   for_each = aws_ecr_repository.this
 

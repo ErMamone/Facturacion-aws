@@ -1,45 +1,32 @@
-# --- OpenTofu / Terraform ---------------------------------------------------
-# Directorios locales de providers y módulos
 .terraform/
 
-# State: vive en S3. Nunca commitear un state local.
 *.tfstate
 *.tfstate.*
 .terraform.tfstate.lock.info
 
-# Planes guardados (pueden contener valores sensibles)
 *.tfplan
 tfplan
 *.plan
 
-# Logs de crash
 crash.log
 crash.*.log
 
-# Variables: pueden tener datos personales (email, IP, ARNs).
-# Se versionan solo los *.tfvars.example
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
 
-# Overrides locales (ej. backend_override.tf para el primer apply de bootstrap)
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Config de CLI
 .terraformrc
 terraform.rc
 .tofurc
 tofu.rc
 
-# NOTA: .terraform.lock.hcl SÍ se commitea (fija versiones/hashes de providers).
-
-# Overlay de Kubernetes generado por scripts/render-k8s.sh en cada up
 k8s/overlays/
 
-# --- Credenciales / entorno --------------------------------------------------
 .env
 .env.*
 *.pem
@@ -48,17 +35,14 @@ kubeconfig
 *.kubeconfig
 .aws/
 
-# --- Herramientas -------------------------------------------------------------
 .tflint.d/
 trivy-results.*
 
-# --- Asistentes de IA -----------------------------------------------------------
 .claude/
 CLAUDE.md
 CLAUDE.local.md
 .mcp.json
 
-# --- SO / editores ------------------------------------------------------------
 .DS_Store
 Thumbs.db
 .idea/

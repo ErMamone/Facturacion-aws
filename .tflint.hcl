@@ -1,5 +1,4 @@
 config {
-  # Solo se analizan módulos locales; los de terraform-aws-modules no.
   call_module_type = "local"
 }
 

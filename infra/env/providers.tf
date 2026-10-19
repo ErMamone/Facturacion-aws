@@ -8,9 +8,6 @@ provider "aws" {
   }
 }
 
-# Helm se autentica contra el cluster con el mismo principal que corre tofu
-# (CI o tu usuario), vía `aws eks get-token`. Ese principal necesita un
-# access entry: ver access_entries en eks.tf.
 provider "helm" {
   kubernetes = {
     host                   = module.eks.cluster_endpoint

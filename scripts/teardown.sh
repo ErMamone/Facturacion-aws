@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Baja el stack env en el orden correcto (doc 04, "Orden de down"):
-#   1. Borra los Ingress -> el LB Controller borra el ALB
-#   2. Espera a que el ALB desaparezca
-#   3. tofu destroy
-#   4. check-orphans.sh
-#
-# Lo usan los workflows down y auto-destroy, y se puede correr a mano.
-# Requiere: aws CLI, kubectl y tofu, con credenciales que tengan acceso al
-# cluster (access entry) y al bucket de state.
 
 set -euo pipefail
 
@@ -28,7 +19,6 @@ echo "==> 1/4 Borrando Ingress"
 if aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
   aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION" >/dev/null
   if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
-    # --wait espera el finalizer del controller, que se quita al borrar el ALB.
     kubectl delete ingress --all -n "$NAMESPACE" --wait=true --timeout=10m
   else
     echo "    No existe el namespace $NAMESPACE"

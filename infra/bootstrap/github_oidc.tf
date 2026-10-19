@@ -1,12 +1,8 @@
-# GitHub Actions -> AWS por OIDC. Cero access keys en GitHub.
-
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
 }
 
-# Solo jobs que corren en un environment autorizado de los repos del proyecto
-# (var.github_oidc_subjects). Ni forks ni jobs sin environment.
 data "aws_iam_policy_document" "gha_trust" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -37,13 +33,7 @@ resource "aws_iam_role" "gha" {
   max_session_duration = 3600
 }
 
-# Permisos "amplios pero acotados" para arrancar (doc 03). Después de las
-# primeras sesiones, achicar con IAM Access Analyzer (generar policy a partir
-# de CloudTrail) y reemplazar los comodines por servicio.
 data "aws_iam_policy_document" "gha" {
-  # Servicios que usa el stack env y los workflows, solo en la región del proyecto.
-  # La condición de región evita que, si el rol se compromete, se levanten
-  # recursos (ej. minería) en otras regiones.
   statement {
     sid = "ServiciosDelProyecto"
     actions = [
@@ -65,8 +55,6 @@ data "aws_iam_policy_document" "gha" {
     }
   }
 
-  # RDS cifra el storage con aws/rds y guarda el password en Secrets Manager
-  # (aws/secretsmanager): necesita usar esas claves administradas por AWS.
   statement {
     sid = "KmsClavesAdministradas"
     actions = [
@@ -93,8 +81,6 @@ data "aws_iam_policy_document" "gha" {
     resources = ["*"]
   }
 
-  # Escritura en IAM solo sobre roles y policies con el prefijo del proyecto.
-  # Todos los roles/policies del stack env se nombran "<project>-...".
   statement {
     sid = "IamRolesDelProyecto"
     actions = [
@@ -123,7 +109,6 @@ data "aws_iam_policy_document" "gha" {
     ]
   }
 
-  # OIDC provider del cluster EKS (IRSA).
   statement {
     sid = "IamOidcEks"
     actions = [

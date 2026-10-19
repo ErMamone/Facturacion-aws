@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# Genera k8s/overlays/demo/kustomization.yaml a partir de los outputs de
-# `tofu output -json` del stack env. Ese overlay no se versiona.
-#
-# Uso: scripts/render-k8s.sh <outputs.json>
-#
-# Variables de entorno:
-#   ECR_REGISTRY   <account>.dkr.ecr.<region>.amazonaws.com   (obligatoria)
-#   BACK_TAG       tag de facturacion-back                      (default: latest)
-#   WEB_TAG        tag de facturacion-web                       (default: latest)
-#   APP_RETENTION  vida de cada factura, ISO-8601               (default: PT10M)
-#
-# Requiere: jq.
 
 set -euo pipefail
 
@@ -34,7 +22,6 @@ backend_role=$(out backend_irsa_role_arn)
 
 mkdir -p "$OUT_DIR"
 cat >"$OUT_DIR/kustomization.yaml" <<EOF
-# GENERADO por scripts/render-k8s.sh. No editar ni commitear.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -49,7 +36,6 @@ images:
     newName: ${ECR_REGISTRY}/facturacion-web
     newTag: "${WEB_TAG}"
 
-# Con hash en el nombre: si cambia la config, el Deployment se reinicia solo.
 configMapGenerator:
   - name: facturacion-back
     literals:

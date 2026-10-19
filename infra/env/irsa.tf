@@ -1,7 +1,3 @@
-# IRSA: roles IAM asumidos por ServiceAccounts de Kubernetes vía el OIDC del cluster.
-# Los nombres de roles y policies empiezan con "<project>-" porque el rol de CI
-# solo puede escribir IAM con ese prefijo (ver bootstrap/github_oidc.tf).
-
 module "lb_controller_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
   version = "~> 6.8"
@@ -19,7 +15,6 @@ module "lb_controller_irsa" {
   }
 }
 
-# Backend: acceso a su prefijo del bucket de facturas y lectura del password de RDS.
 data "aws_iam_policy_document" "backend" {
   statement {
     sid       = "ObjetosFacturas"

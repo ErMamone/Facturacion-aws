@@ -1,5 +1,3 @@
-# Budget mensual + Cost Anomaly Detection (doc 02).
-
 resource "aws_budgets_budget" "monthly" {
   name         = "${var.project}-mensual"
   budget_type  = "COST"
@@ -7,8 +5,7 @@ resource "aws_budgets_budget" "monthly" {
   limit_unit   = "USD"
   time_unit    = "MONTHLY"
 
-  # Mientras haya créditos, el costo neto es 0 y un budget con créditos
-  # incluidos nunca alertaría. Se mide el uso bruto para enterarse a tiempo.
+  # Con créditos incluidos el costo neto es 0 y nunca alertaría.
   cost_types {
     include_credit = false
     include_refund = false
@@ -39,12 +36,6 @@ resource "aws_budgets_budget" "monthly" {
   }
 }
 
-# Cost Explorer tarda hasta 24 h en activarse en una cuenta nueva y, mientras
-# tanto, la API rechaza todo: usar enable_anomaly_detection = false.
-#
-# AWS permite un solo monitor DIMENSIONAL/SERVICE por cuenta y al activar
-# Cost Explorer suele crear uno por defecto. En ese caso usar
-# create_anomaly_monitor = false + existing_anomaly_monitor_arn.
 resource "aws_ce_anomaly_monitor" "services" {
   count = var.enable_anomaly_detection && var.create_anomaly_monitor ? 1 : 0
 

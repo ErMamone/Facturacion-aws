@@ -1,5 +1,3 @@
-# Baja el entorno completo (doc 07). Environment `teardown`: sin aprobación,
-# limitado a la rama prd en la configuración del environment.
 name: down
 
 on:
