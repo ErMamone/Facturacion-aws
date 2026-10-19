@@ -152,3 +152,17 @@ kubectl logs -n facturacion deploy/facturacion-back
 - Medir tiempos de `up` y `down` (doc 01) y el costo real contra el doc 02.
 - Achicar los permisos de `gha-facturacion` con IAM Access Analyzer (doc 03).
 - Revisar los hallazgos de Trivy y pasarlo a bloqueante.
+
+## 9. Versionado
+
+Cada merge a `prd` tiene que subir la versión. El workflow `version` corre en los PRs a `prd` y falla si la versión no es mayor que la del último release (tag `v*`).
+
+| Repo | Dónde se cambia |
+|---|---|
+| Facturacion-aws | `version.txt` |
+| Facturacion-back | `<version>` del proyecto en `pom.xml` |
+| Facturacion-web | `"version"` en `package.json` (`npm version patch --no-git-tag-version` también actualiza el lock) |
+
+Formato `X.Y.Z`, sin sufijos. Al mergear, el workflow crea el tag `vX.Y.Z` y el GitHub Release; en back y web la imagen también se publica como `facturacion-back:X.Y.Z` / `facturacion-web:X.Y.Z`, usable como `back_tag` / `web_tag` en `up`.
+
+Para que bloquee el merge: **Settings → Branches → regla de `prd` → Require status checks to pass → `version`**.
