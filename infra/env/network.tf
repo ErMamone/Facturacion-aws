@@ -1,10 +1,3 @@
-# VPC armada a mano (doc 04: "para aprender").
-#   - 2 AZ
-#   - 2 subnets públicas: ALB y NAT
-#   - 2 subnets privadas: pods de Fargate y RDS
-#   - 1 solo NAT Gateway (no uno por AZ)
-#   - S3 Gateway Endpoint (gratis): saca del NAT el tráfico a S3 y a las capas de ECR
-
 data "aws_availability_zones" "available" {
   state            = "available"
   exclude_zone_ids = var.excluded_az_ids
@@ -18,9 +11,7 @@ data "aws_availability_zones" "available" {
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
-  # 10.0.0.0/24, 10.0.1.0/24
-  public_subnet_cidrs = [for i in range(length(local.azs)) : cidrsubnet(var.vpc_cidr, 8, i)]
-  # 10.0.16.0/20, 10.0.32.0/20 (cada pod de Fargate consume una IP)
+  public_subnet_cidrs  = [for i in range(length(local.azs)) : cidrsubnet(var.vpc_cidr, 8, i)]
   private_subnet_cidrs = [for i in range(length(local.azs)) : cidrsubnet(var.vpc_cidr, 4, i + 1)]
 }
 
@@ -29,16 +20,13 @@ resource "aws_vpc" "this" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  # auto-destroy busca esta VPC (tag project) y lee expires-at. Va en la VPC
-  # porque es lo primero que se crea y lo último que se borra: un `up` que
-  # falló a mitad de camino también se limpia.
+  # auto-destroy lee expires-at de este tag.
   tags = merge(
     { Name = local.name },
     var.expires_at == "" ? {} : { "expires-at" = var.expires_at },
   )
 }
 
-# Deja el SG default sin reglas: nada puede usarlo por accidente.
 resource "aws_default_security_group" "this" {
   vpc_id = aws_vpc.this.id
 }
@@ -77,7 +65,6 @@ resource "aws_subnet" "private" {
   }
 }
 
-# La EIP la maneja OpenTofu: se libera en el destroy (doc 02, "Elastic IP suelta").
 resource "aws_eip" "nat" {
   domain = "vpc"
 
@@ -120,7 +107,6 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Una sola route table privada: las dos AZ salen por el mismo NAT.
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
 
@@ -153,11 +139,6 @@ resource "aws_vpc_endpoint" "s3" {
   }
 }
 
-# SG del ALB. El ALB lo crea el LB Controller a partir del Ingress; el Ingress
-# tiene que referenciar este SG con las anotaciones:
-#   alb.ingress.kubernetes.io/security-groups: <alb_security_group_id>
-#   alb.ingress.kubernetes.io/manage-backend-security-group-rules: "true"
-# Así el SG lo maneja OpenTofu y no queda huérfano.
 resource "aws_security_group" "alb" {
   name        = "${local.name}-alb"
   description = "ALB de la app: HTTP desde allowed_cidrs"

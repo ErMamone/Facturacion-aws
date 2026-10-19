@@ -1,6 +1,4 @@
-# Backend parcial: el bucket se pasa en `tofu init`:
-#
-#   tofu init -backend-config="bucket=facturacion-tfstate-<account_id>"
+# tofu init -backend-config="bucket=facturacion-tfstate-<account_id>"
 terraform {
   backend "s3" {
     key          = "env/terraform.tfstate"

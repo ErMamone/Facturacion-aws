@@ -1,5 +1,3 @@
-# Frontend React servido por nginx-unprivileged (repo Facturacion-web).
-# No hace proxy de /api: el ALB rutea /api al backend (mismo origen, sin CORS).
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -19,7 +17,6 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        # Usuario "nginx" de la imagen nginx-unprivileged
         runAsUser: 101
       containers:
         - name: web
@@ -27,7 +24,6 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          # Fargate: 0,25 vCPU / 0,5 GB
           resources:
             requests:
               cpu: 100m

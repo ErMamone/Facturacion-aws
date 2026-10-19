@@ -1,8 +1,3 @@
-# Bucket de state de ambos stacks (bootstrap y env).
-# Cifrado SSE-S3; no se usa el cifrado de state de OpenTofu (decisión del proyecto,
-# ver README). Lock nativo de OpenTofu en S3 (use_lockfile), sin DynamoDB.
-
-# Block Public Access a nivel cuenta (doc 03: "cuenta y bucket").
 resource "aws_s3_account_public_access_block" "this" {
   block_public_acls       = true
   block_public_policy     = true

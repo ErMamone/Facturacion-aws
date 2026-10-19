@@ -1,4 +1,3 @@
-# Tiene su propio Fargate profile (infra/env/eks.tf): todo lo que corre acá va a Fargate.
 apiVersion: v1
 kind: Namespace
 metadata:

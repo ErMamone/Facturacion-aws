@@ -1,5 +1,3 @@
-# Chequeos estáticos de la infra: no toca AWS, no usa credenciales.
-# Corre en push a dev/prd y en PRs hacia dev/prd (flujo dev -> PR -> prd).
 name: infra-ci
 
 on:
@@ -66,7 +64,6 @@ jobs:
 
       - name: tflint
         env:
-          # Evita el rate limit de la API de GitHub al bajar el plugin de AWS.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           tflint --init --config="$GITHUB_WORKSPACE/.tflint.hcl"
@@ -85,7 +82,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Renderiza el overlay con outputs de ejemplo y valida que kustomize lo arme.
       - name: kustomize build
         env:
           ECR_REGISTRY: 123456789012.dkr.ecr.us-east-1.amazonaws.com
@@ -109,9 +105,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # TODO: por ahora solo reporta (exit-code 0). Después de la primera corrida,
-      # documentar en .trivyignore los hallazgos aceptados (endpoint EKS público,
-      # ALB abierto, etc.) y pasar exit-code a "1".
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config

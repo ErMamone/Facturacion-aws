@@ -25,15 +25,10 @@ variable "state_noncurrent_days" {
 variable "github_oidc_subjects" {
   description = "Claims `sub` de GitHub autorizados a asumir el rol de CI (repo + environment)."
   type        = list(string)
-  # GitHub emite el sub con IDs inmutables: repo:<owner>@<owner_id>/<repo>@<repo_id>:environment:<env>.
-  # Los IDs evitan que un repo renombrado o recreado con el mismo nombre herede el acceso.
-  # IDs: https://api.github.com/repos/ErMamone/<repo> (campos id y owner.id).
+  # Formato de GitHub con IDs inmutables: repo:<owner>@<owner_id>/<repo>@<repo_id>:environment:<env>
   default = [
-    # up: levanta la infra y despliega (con aprobación)
     "repo:ErMamone@46795580/Facturacion-aws@1421248669:environment:demo",
-    # down y auto-destroy: sin aprobación, limitado a la rama prd en GitHub
     "repo:ErMamone@46795580/Facturacion-aws@1421248669:environment:teardown",
-    # push de imágenes a ECR (con aprobación)
     "repo:ErMamone@46795580/Facturacion-back@1421251879:environment:demo",
     "repo:ErMamone@46795580/Facturacion-web@1421254748:environment:demo",
   ]

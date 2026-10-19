@@ -21,8 +21,6 @@ variable "expires_at" {
   }
 }
 
-# --- Red -----------------------------------------------------------------------
-
 variable "vpc_cidr" {
   description = "CIDR de la VPC."
   type        = string
@@ -40,8 +38,6 @@ variable "allowed_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
-
-# --- EKS -----------------------------------------------------------------------
 
 variable "kubernetes_version" {
   description = "Versión de Kubernetes. Tiene que estar en soporte estándar (Extended Support suma 0,50 USD/h)."
@@ -78,8 +74,6 @@ variable "lb_controller_chart_version" {
   type        = string
   default     = "3.6.0"
 }
-
-# --- Datos ---------------------------------------------------------------------
 
 variable "facturas_prefix" {
   description = "Prefijo dentro del bucket al que el backend tiene acceso."

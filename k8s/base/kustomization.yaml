@@ -1,6 +1,3 @@
-# Base de la app. Los valores que dependen de cada `up` (imágenes, ARN de IRSA,
-# SG del ALB, endpoint de RDS, bucket) los completa el overlay que genera
-# scripts/render-k8s.sh en k8s/overlays/demo (no se versiona).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 

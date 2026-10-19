@@ -1,10 +1,3 @@
-# ALB creado por el AWS Load Balancer Controller.
-#   /api/* -> backend
-#   /*     -> frontend
-#
-# El SG del ALB lo crea OpenTofu (output alb_security_group_id) y lo completa
-# el overlay. Así la allowlist (allowed_cidrs) la maneja OpenTofu y el SG no
-# queda huérfano.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,7 +5,6 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    # Nombre fijo: el down lo usa para esperar a que el ALB desaparezca.
     alb.ingress.kubernetes.io/load-balancer-name: facturacion
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
     alb.ingress.kubernetes.io/security-groups: REEMPLAZADO-POR-OVERLAY

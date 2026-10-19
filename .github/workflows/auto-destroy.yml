@@ -1,15 +1,8 @@
-# Red de seguridad (doc 07): cada hora revisa si hay un entorno levantado y lo
-# baja si pasó su expires-at (tag de la VPC que pone `up`). Un entorno sin
-# tag (ej. un up que falló antes de taggear, o un apply manual sin
-# expires_at) se baja en la primera corrida.
-#
-# Ojo: GitHub deshabilita los `schedule` de repos públicos después de 60 días
-# sin actividad en el repo.
 name: auto-destroy
 
 on:
   schedule:
-    - cron: "17 * * * *" # minuto 17 de cada hora (evita el pico de la hora en punto)
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions: {}

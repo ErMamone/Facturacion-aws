@@ -1,5 +1,3 @@
-# Levanta el entorno completo y despliega la app (doc 07).
-# Corre en el environment `demo` (pide tu aprobación). Tarda ~25 min.
 name: up
 
 on:
@@ -28,7 +26,6 @@ on:
 
 permissions: {}
 
-# up, down y auto-destroy nunca corren a la vez.
 concurrency:
   group: env-demo
   cancel-in-progress: false
@@ -74,7 +71,6 @@ jobs:
           tofu-version: ${{ env.TOFU_VERSION }}
           kubectl-version: ${{ env.KUBECTL_VERSION }}
 
-      # Antes de gastar plata: las imágenes tienen que existir en ECR.
       - name: Verificar imágenes en ECR
         id: ecr
         env:
@@ -95,8 +91,6 @@ jobs:
         env:
           TF_VAR_allowed_cidrs: ${{ steps.inputs.outputs.cidrs }}
           TF_VAR_expires_at: ${{ steps.inputs.outputs.expires_at }}
-          # Opcional: tu usuario IAM, para usar kubectl desde tu máquina.
-          # Variable de GitHub en formato JSON: ["arn:aws:iam::<account>:user/<usuario>"]
           TF_VAR_admin_principal_arns: ${{ vars.CLUSTER_ADMIN_ARNS || '[]' }}
           STATE_BUCKET: facturacion-tfstate-${{ steps.ecr.outputs.account }}
         run: |
@@ -147,9 +141,6 @@ jobs:
           done
           [[ -n "$host" ]] || { echo "::error::El Ingress no tiene ALB después de 10 minutos"; exit 1; }
           echo "host=$host" >> "$GITHUB_OUTPUT"
-          # El DNS del ALB tarda unos minutos en resolver y los targets en pasar a healthy.
-          # /api sin filtros devuelve 400 del backend: cualquier código < 500 significa
-          # que el ALB llegó al pod (502/503 = sin targets sanos; 000 = sin DNS/conexión).
           code() { curl -s -o /dev/null --max-time 5 -w '%{http_code}' "$1" || true; }
           for _ in $(seq 1 60); do
             web=$(code "http://$host/")

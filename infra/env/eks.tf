@@ -1,9 +1,3 @@
-# Cluster EKS solo Fargate.
-#
-# Endpoint de la API: público (0.0.0.0/0) y protegido por IAM + access entries.
-# Trade-off aceptado: restringirlo por CIDR implica mantener los rangos de
-# GitHub Actions, que son muchos y cambian. El cluster vive minutos/horas.
-
 data "aws_iam_role" "ci" {
   name = var.ci_role_name
 }
@@ -41,8 +35,6 @@ module "eks" {
   name               = local.name
   kubernetes_version = var.kubernetes_version
 
-  # STANDARD: nunca entra en Extended Support (+0,50 USD/h); al vencer el
-  # soporte estándar, AWS actualiza la versión.
   upgrade_policy = {
     support_type = "STANDARD"
   }
@@ -57,15 +49,12 @@ module "eks" {
   enable_cluster_creator_admin_permissions = false
   access_entries                           = local.access_entries
 
-  # Sin logs del control plane ni log group (doc 02: log groups sin retención).
   enabled_log_types           = []
   create_cloudwatch_log_group = false
 
-  # Sin KMS propio para secrets (0 costo; cluster efímero).
   create_kms_key    = false
   encryption_config = null
 
-  # Sin nodos EC2.
   create_node_security_group = false
 
   fargate_profiles = {
@@ -81,7 +70,6 @@ module "eks" {
   }
 
   addons = {
-    # Fargate-only: CoreDNS tiene que poder agendarse en Fargate.
     coredns = {
       configuration_values = jsonencode({
         computeType = "Fargate"

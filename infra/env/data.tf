@@ -1,7 +1,3 @@
-# RDS PostgreSQL + bucket S3 de facturas. Todo descartable: se destruye por sesión.
-
-# --- RDS -----------------------------------------------------------------------
-
 resource "aws_db_subnet_group" "this" {
   name       = local.name
   subnet_ids = aws_subnet.private[*].id
@@ -17,7 +13,7 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# Los pods de Fargate usan el security group primario del cluster.
+# Los pods de Fargate usan el SG primario del cluster.
 resource "aws_vpc_security_group_ingress_rule" "rds_from_pods" {
   security_group_id            = aws_security_group.rds.id
   description                  = "PostgreSQL desde los pods (SG primario del cluster)"
@@ -37,9 +33,8 @@ resource "aws_db_instance" "this" {
   storage_type      = "gp3"
   storage_encrypted = true
 
-  db_name  = var.db_name
-  username = var.db_username
-  # RDS genera el password y lo guarda en Secrets Manager. No pasa por el state.
+  db_name                     = var.db_name
+  username                    = var.db_username
   manage_master_user_password = true
 
   db_subnet_group_name   = aws_db_subnet_group.this.name
@@ -47,7 +42,6 @@ resource "aws_db_instance" "this" {
   publicly_accessible    = false
   multi_az               = false
 
-  # Datos descartables: sin backups automáticos ni snapshot final.
   backup_retention_period = 0
   skip_final_snapshot     = true
   deletion_protection     = false
@@ -56,12 +50,9 @@ resource "aws_db_instance" "this" {
   apply_immediately          = true
 }
 
-# --- S3 facturas ----------------------------------------------------------------
-
 resource "aws_s3_bucket" "facturas" {
   bucket = "${local.name}-data-${local.account_id}"
 
-  # Se puede destruir con objetos adentro.
   force_destroy = true
 }
 

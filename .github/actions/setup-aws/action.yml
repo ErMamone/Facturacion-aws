@@ -1,6 +1,5 @@
-# Setup común de up / down / auto-destroy: credenciales de AWS por OIDC,
-# OpenTofu y kubectl con versiones fijas.
 name: setup-aws
+
 description: Credenciales AWS (OIDC) + OpenTofu + kubectl
 
 inputs:
