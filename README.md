@@ -19,7 +19,7 @@ docs/
   OPERACION.md       configuración de GitHub, up / down / auto-destroy, troubleshooting
 .github/workflows/
   infra-ci.yml       fmt, validate, tflint, shellcheck, kustomize y trivy en dev/prd
-  up.yml             levanta infra + despliega la app (environment demo, con aprobación)
+  up.yml             levanta infra + despliega la app (environment demo)
   down.yml           baja todo (environment teardown)
   auto-destroy.yml   cada hora: baja el entorno si venció su TTL
 ```
@@ -36,7 +36,7 @@ docs/
 | Región | `us-east-1` | Costos calculados ahí (doc 02) |
 | State | `facturacion-tfstate-<account_id>`, versionado, privado, SSE-S3, solo TLS | **Sin** cifrado de state de OpenTofu: quien accede al bucket ya tiene acceso a la cuenta. Además, el password de RDS no pasa por el state |
 | Password de RDS | `manage_master_user_password = true` | Lo genera RDS en Secrets Manager |
-| Auth CI → AWS | OIDC, un solo rol `gha-facturacion` para los 3 repos | Trust policy limitada a environments: `demo` en los 3 repos (con aprobación) y `teardown` en Facturacion-aws (sin aprobación, solo rama `prd`) |
+| Auth CI → AWS | OIDC, un solo rol `gha-facturacion` para los 3 repos | Trust policy limitada a environments: `demo` en los 3 repos y `teardown` en Facturacion-aws, todos limitados a la rama `prd` |
 | Auto-destroy | Cada hora, TTL por entorno (tag `expires-at` en la VPC, default 3 h) | Un olvido cuesta como mucho unas horas. Un `up` fallido también se limpia |
 | Manifiestos | `k8s/` en este repo, Kustomize | Están al lado de los outputs de tofu que necesitan |
 | Permisos del rol de CI | Comodines por servicio, solo en `us-east-1`; IAM solo sobre `facturacion-*` | Arrancar amplio y achicar con IAM Access Analyzer |
