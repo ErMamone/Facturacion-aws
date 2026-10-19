@@ -1,0 +1,89 @@
+# Red de seguridad (doc 07): cada hora revisa si hay un entorno levantado y lo
+# baja si pasó su expires-at (tag de la VPC que pone `up`). Un entorno sin
+# tag (ej. un up que falló antes de taggear, o un apply manual sin
+# expires_at) se baja en la primera corrida.
+#
+# Ojo: GitHub deshabilita los `schedule` de repos públicos después de 60 días
+# sin actividad en el repo.
+name: auto-destroy
+
+on:
+  schedule:
+    - cron: "17 * * * *" # minuto 17 de cada hora (evita el pico de la hora en punto)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: env-demo
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TOFU_VERSION: "1.13.1"
+  KUBECTL_VERSION: v1.37.1
+  PROJECT: facturacion
+
+jobs:
+  auto-destroy:
+    runs-on: ubuntu-latest
+    environment: teardown
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-aws
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+          kubectl-version: ${{ env.KUBECTL_VERSION }}
+
+      - name: ¿Hay que destruir?
+        id: check
+        run: |
+          set -euo pipefail
+          tags=$(aws ec2 describe-vpcs --filters "Name=tag:project,Values=$PROJECT" \
+            --query 'Vpcs[0].Tags' --output json)
+          if [[ "$tags" == "null" ]]; then
+            echo "No hay entorno levantado."
+            echo "destroy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          expires=$(jq -r '[.[] | select(.Key == "expires-at") | .Value][0] // ""' <<<"$tags")
+          now=$(date -u +%s)
+          if [[ -z "$expires" ]]; then
+            echo "Entorno sin expires-at: se destruye."
+            echo "destroy=true" >> "$GITHUB_OUTPUT"
+          elif (( now >= $(date -u -d "$expires" +%s) )); then
+            echo "Venció el $expires: se destruye."
+            echo "destroy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Vence el $expires: todavía no."
+            echo "destroy=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "expires=$expires" >> "$GITHUB_OUTPUT"
+
+      - name: Teardown
+        if: steps.check.outputs.destroy == 'true'
+        run: scripts/teardown.sh
+
+      - name: Resumen
+        if: always() && steps.check.outputs.destroy == 'true'
+        env:
+          RESULT: ${{ job.status }}
+          EXPIRES: ${{ steps.check.outputs.expires }}
+        run: |
+          {
+            echo "## Auto-destroy"
+            echo "expires-at: \`${EXPIRES:-sin tag}\`"
+            echo
+            if [[ "$RESULT" == "success" ]]; then
+              echo "Entorno destruido y sin huérfanos."
+            else
+              echo "**Falló.** Revisá el log y la consola de AWS: puede haber recursos cobrando."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

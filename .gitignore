@@ -36,6 +36,9 @@ tofu.rc
 
 # NOTA: .terraform.lock.hcl SÍ se commitea (fija versiones/hashes de providers).
 
+# Overlay de Kubernetes generado por scripts/render-k8s.sh en cada up
+k8s/overlays/
+
 # --- Credenciales / entorno --------------------------------------------------
 .env
 .env.*

@@ -5,8 +5,8 @@ resource "aws_iam_openid_connect_provider" "github" {
   client_id_list = ["sts.amazonaws.com"]
 }
 
-# Solo los jobs que corren en el environment `demo` de este repo pueden asumir
-# el rol. Ni forks, ni otras ramas, ni jobs sin environment.
+# Solo jobs que corren en un environment autorizado de los repos del proyecto
+# (var.github_oidc_subjects). Ni forks ni jobs sin environment.
 data "aws_iam_policy_document" "gha_trust" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -25,14 +25,14 @@ data "aws_iam_policy_document" "gha_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:environment:${var.github_environment}"]
+      values   = var.github_oidc_subjects
     }
   }
 }
 
 resource "aws_iam_role" "gha" {
   name                 = "gha-${var.project}"
-  description          = "Rol asumido por GitHub Actions (${var.github_repo}, environment ${var.github_environment})"
+  description          = "Rol asumido por GitHub Actions de los repos de ${var.project}"
   assume_role_policy   = data.aws_iam_policy_document.gha_trust.json
   max_session_duration = 3600
 }

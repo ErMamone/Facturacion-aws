@@ -74,17 +74,49 @@ tofu -chdir=infra/bootstrap providers lock -platform=windows_amd64 -platform=lin
 tofu -chdir=infra/env providers lock -platform=windows_amd64 -platform=linux_amd64
 ```
 
-## 3. Credenciales de AWS (solo para bootstrap)
+## 3. Credenciales de AWS
 
-Según el doc 03: usuario IAM admin propio con MFA; las access keys locales se usan **solo** para aplicar `bootstrap` y después se borran o se rotan fuera del repo.
+Sin access keys: se usa `aws login` (AWS CLI 2.32 o posterior), que toma la sesión de la consola y genera credenciales temporales de hasta 12 h. No queda nada de larga duración en tu máquina que se pueda filtrar (doc 03, amenaza 1).
+
+### 3.1 En la consola (una sola vez)
+
+1. **Root con MFA.** Entrá como root → menú de la cuenta (arriba a la derecha) → **Security credentials** → **Assign MFA device**. Después de este paso no se vuelve a usar el root.
+2. **Usuario admin.** **IAM → Users → Create user**:
+   - Nombre: el que quieras (ej. `eros-admin`).
+   - Tildar **Provide user access to the AWS Management Console** → *I want to create an IAM user* → password propia.
+   - **Permissions → Attach policies directly → `AdministratorAccess`**. Ya incluye los permisos de `aws login`; si algún día usás una policy más chica, sumá `SignInLocalDevelopmentAccess`.
+3. **MFA del usuario.** Cerrá sesión del root y entrá con el usuario nuevo. La URL de login está en **IAM → Dashboard → AWS sign-in URL**, con la forma `https://<account_id>.signin.aws.amazon.com/console`. Después: **IAM → Users → (tu usuario) → Security credentials → Assign MFA device**.
+4. **No crees access keys.**
+
+### 3.2 En tu máquina
 
 ```powershell
-aws configure --profile facturacion-admin
-# region: us-east-1, output: json
+aws --version   # tiene que ser 2.32 o posterior
 
+# Abre el navegador: elegí la sesión de tu usuario admin (no la de root)
+aws login --profile facturacion-login
+# Region: us-east-1
+```
+
+Algunas herramientas (como el provider de AWS de OpenTofu) todavía no entienden los perfiles de `aws login`. Para esos casos se arma un segundo perfil que le pide las credenciales a la CLI. Agregalo al final de `%USERPROFILE%\.aws\config`:
+
+```ini
+[profile facturacion-admin]
+credential_process = aws configure export-credentials --profile facturacion-login --format process
+region = us-east-1
+```
+
+Probalo:
+
+```powershell
 $env:AWS_PROFILE = "facturacion-admin"
 aws sts get-caller-identity
+# "Arn": "arn:aws:iam::<account_id>:user/<tu-usuario>"   <- tu usuario, no root
 ```
+
+Cada sesión dura como mucho 12 h. Cuando expire (`ExpiredToken` o un error de credenciales), volvé a correr `aws login --profile facturacion-login`. Al terminar podés cerrarla con `aws logout --profile facturacion-login`.
+
+En una terminal nueva hay que volver a setear `$env:AWS_PROFILE = "facturacion-admin"`.
 
 ## 4. Bootstrap (una sola vez)
 
@@ -99,16 +131,15 @@ Copy-Item terraform.tfvars.example terraform.tfvars
 **4.1 Primer apply con backend local.** Un archivo `*_override.tf` (ignorado por git) reemplaza el backend S3:
 
 ```powershell
-@'
-terraform {
-  backend "local" {}
-}
-'@ | Set-Content -Encoding utf8 backend_override.tf
+# WriteAllText escribe UTF-8 sin BOM (Set-Content -Encoding utf8 en PowerShell 5.1 agrega BOM)
+[IO.File]::WriteAllText("$PWD\backend_override.tf", "terraform {`n  backend `"local`" {}`n}`n")
 
 tofu init
 tofu plan -out bootstrap.tfplan
 tofu apply bootstrap.tfplan
 ```
+
+Si falla `aws_ce_anomaly_monitor` con `User not enabled for cost explorer access`: como root, **Account → IAM user and role access to Billing information → Activate IAM Access**, y abrí **Cost Explorer** una vez para activarlo. Tarda hasta 24 h; mientras tanto poné `enable_anomaly_detection = false` en `terraform.tfvars`, seguí con los pasos siguientes y volvé a ponerlo en `true` cuando esté listo.
 
 Si falla `aws_ce_anomaly_monitor` porque la cuenta ya tiene un monitor por servicio, buscalo con `aws ce get-anomaly-monitors`, poné `create_anomaly_monitor = false` y `existing_anomaly_monitor_arn = "..."` en `terraform.tfvars`, y volvé a aplicar.
 
@@ -133,42 +164,34 @@ tofu output
 
 `gha_role_arn` es el rol que van a asumir los workflows.
 
-## 5. Configuración de GitHub (manual)
+## 5. GitHub y operación diaria
 
-Desde Settings del repo:
+La configuración de GitHub (environments, variables) y cómo levantar y bajar el entorno están en [OPERACION.md](OPERACION.md).
 
-- [ ] **Environments → New environment `demo`** → Required reviewers: vos. Ningún job puede asumir el rol de AWS sin pasar por este environment (la trust policy exige `environment:demo`).
-- [ ] **Code security → Secret scanning** y **Push protection**: activados.
-- [ ] **Branches**: crear `dev`; proteger `prd` (merge solo por PR desde `dev` con `infra-ci` en verde).
+## 6. Stack env desde tu máquina (opcional)
 
-No se carga ningún secret de AWS en GitHub.
-
-## 6. Stack env desde tu máquina (opcional, para la primera prueba)
-
-Lo normal es levantarlo con el workflow `up` (doc 07). Para probar a mano:
+Lo normal es usar los workflows `up` y `down`. Para probar a mano:
 
 ```powershell
 cd infra/env
 $account = aws sts get-caller-identity --query Account --output text
 tofu init -backend-config="bucket=facturacion-tfstate-$account"
 
-# Tu usuario necesita admin del cluster para que Helm instale el LB Controller.
-# Se pasa por terraform.tfvars (ignorado por git): PowerShell 5.1 rompe las
+# - admin_principal_arns: tu usuario necesita admin del cluster para que Helm
+#   instale el LB Controller.
+# - expires_at: sin este tag, auto-destroy baja el entorno en su próxima corrida.
+# Van por terraform.tfvars (ignorado por git) porque PowerShell 5.1 rompe las
 # comillas dentro de -var.
 $me = aws sts get-caller-identity --query Arn --output text
-"admin_principal_arns = [`"$me`"]" | Set-Content -Encoding utf8 terraform.tfvars
+$exp = (Get-Date).ToUniversalTime().AddHours(3).ToString("yyyy-MM-ddTHH:mm:ssZ")
+[IO.File]::WriteAllText("$PWD\terraform.tfvars", "admin_principal_arns = [`"$me`"]`nexpires_at = `"$exp`"`n")
 
 tofu plan -out env.tfplan
 tofu apply env.tfplan
 ```
 
-### Down (el orden importa, doc 04)
+Para bajarlo, desde Git Bash en la raíz del repo (usa `aws`, `kubectl` y `tofu`):
 
-```powershell
-aws eks update-kubeconfig --name facturacion --region us-east-1
-kubectl delete ingress --all -n facturacion
-# Esperar hasta que no quede ALB del cluster:
-aws elbv2 describe-load-balancers --query "LoadBalancers[].LoadBalancerName"
-tofu destroy
-bash ../../scripts/check-orphans.sh facturacion us-east-1
+```bash
+AWS_PROFILE=facturacion-admin scripts/teardown.sh
 ```

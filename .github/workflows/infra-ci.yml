@@ -7,16 +7,18 @@ on:
     branches: [dev, prd]
     paths:
       - "infra/**"
+      - "k8s/**"
       - "scripts/**"
       - ".tflint.hcl"
-      - ".github/workflows/infra-ci.yml"
+      - ".github/**"
   pull_request:
     branches: [dev, prd]
     paths:
       - "infra/**"
+      - "k8s/**"
       - "scripts/**"
       - ".tflint.hcl"
-      - ".github/workflows/infra-ci.yml"
+      - ".github/**"
 
 permissions:
   contents: read
@@ -77,6 +79,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: shellcheck scripts/
         run: shellcheck scripts/*.sh
+
+  k8s:
+    name: kustomize build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Renderiza el overlay con outputs de ejemplo y valida que kustomize lo arme.
+      - name: kustomize build
+        env:
+          ECR_REGISTRY: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+        run: |
+          cat > "$RUNNER_TEMP/outputs.json" <<'JSON'
+          {
+            "region": {"value": "us-east-1"},
+            "alb_security_group_id": {"value": "sg-0123456789abcdef0"},
+            "facturas_bucket": {"value": "facturacion-data-123456789012"},
+            "rds_endpoint": {"value": "facturacion.abc.us-east-1.rds.amazonaws.com:5432"},
+            "rds_db_name": {"value": "facturacion"},
+            "backend_irsa_role_arn": {"value": "arn:aws:iam::123456789012:role/facturacion-backend-x"}
+          }
+          JSON
+          scripts/render-k8s.sh "$RUNNER_TEMP/outputs.json"
+          kubectl kustomize k8s/overlays/demo
 
   trivy:
     name: trivy config

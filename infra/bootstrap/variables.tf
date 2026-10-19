@@ -22,16 +22,18 @@ variable "state_noncurrent_days" {
   default     = 90
 }
 
-variable "github_repo" {
-  description = "Repositorio de GitHub (owner/repo) autorizado a asumir el rol de CI."
-  type        = string
-  default     = "ErMamone/Facturacion-aws"
-}
-
-variable "github_environment" {
-  description = "GitHub Environment autorizado a asumir el rol de CI."
-  type        = string
-  default     = "demo"
+variable "github_oidc_subjects" {
+  description = "Claims `sub` de GitHub autorizados a asumir el rol de CI (repo + environment)."
+  type        = list(string)
+  default = [
+    # up: levanta la infra y despliega (con aprobación)
+    "repo:ErMamone/Facturacion-aws:environment:demo",
+    # down y auto-destroy: sin aprobación, limitado a la rama prd en GitHub
+    "repo:ErMamone/Facturacion-aws:environment:teardown",
+    # push de imágenes a ECR (con aprobación)
+    "repo:ErMamone/Facturacion-back:environment:demo",
+    "repo:ErMamone/Facturacion-web:environment:demo",
+  ]
 }
 
 variable "ecr_keep_images" {
@@ -55,6 +57,12 @@ variable "anomaly_threshold_usd" {
   description = "Impacto mínimo (USD) para que una anomalía de costo dispare un email."
   type        = number
   default     = 5
+}
+
+variable "enable_anomaly_detection" {
+  description = "Crear la detección de anomalías (monitor + suscripción por email). Poner false mientras Cost Explorer se activa en una cuenta nueva (hasta 24 h)."
+  type        = bool
+  default     = true
 }
 
 variable "create_anomaly_monitor" {

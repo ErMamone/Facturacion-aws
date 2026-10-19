@@ -1,0 +1,44 @@
+# Setup común de up / down / auto-destroy: credenciales de AWS por OIDC,
+# OpenTofu y kubectl con versiones fijas.
+name: setup-aws
+description: Credenciales AWS (OIDC) + OpenTofu + kubectl
+
+inputs:
+  role-to-assume:
+    description: ARN del rol de CI (gha-facturacion)
+    required: true
+  aws-region:
+    description: Región de AWS
+    required: true
+  tofu-version:
+    description: Versión de OpenTofu
+    required: true
+  kubectl-version:
+    description: Versión de kubectl (misma minor que el cluster)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: gha-${{ github.run_id }}
+
+    - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+      with:
+        tofu_version: ${{ inputs.tofu-version }}
+        tofu_wrapper: false
+
+    - name: kubectl
+      shell: bash
+      env:
+        KUBECTL_VERSION: ${{ inputs.kubectl-version }}
+      run: |
+        set -euo pipefail
+        url="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+        curl -fsSLo "$RUNNER_TEMP/kubectl" "$url"
+        echo "$(curl -fsSL "$url.sha256")  $RUNNER_TEMP/kubectl" | sha256sum --check --status
+        install -m 0755 "$RUNNER_TEMP/kubectl" /usr/local/bin/kubectl
+        kubectl version --client

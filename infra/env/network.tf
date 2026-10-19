@@ -29,9 +29,13 @@ resource "aws_vpc" "this" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = {
-    Name = local.name
-  }
+  # auto-destroy busca esta VPC (tag project) y lee expires-at. Va en la VPC
+  # porque es lo primero que se crea y lo último que se borra: un `up` que
+  # falló a mitad de camino también se limpia.
+  tags = merge(
+    { Name = local.name },
+    var.expires_at == "" ? {} : { "expires-at" = var.expires_at },
+  )
 }
 
 # Deja el SG default sin reglas: nada puede usarlo por accidente.

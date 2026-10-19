@@ -39,11 +39,14 @@ resource "aws_budgets_budget" "monthly" {
   }
 }
 
-# AWS permite un solo monitor DIMENSIONAL/SERVICE por cuenta y en cuentas
-# nuevas a veces ya viene creado. Si el apply falla por eso, usar
+# Cost Explorer tarda hasta 24 h en activarse en una cuenta nueva y, mientras
+# tanto, la API rechaza todo: usar enable_anomaly_detection = false.
+#
+# AWS permite un solo monitor DIMENSIONAL/SERVICE por cuenta y al activar
+# Cost Explorer suele crear uno por defecto. En ese caso usar
 # create_anomaly_monitor = false + existing_anomaly_monitor_arn.
 resource "aws_ce_anomaly_monitor" "services" {
-  count = var.create_anomaly_monitor ? 1 : 0
+  count = var.enable_anomaly_detection && var.create_anomaly_monitor ? 1 : 0
 
   name              = "${var.project}-servicios"
   monitor_type      = "DIMENSIONAL"
@@ -51,6 +54,8 @@ resource "aws_ce_anomaly_monitor" "services" {
 }
 
 resource "aws_ce_anomaly_subscription" "email" {
+  count = var.enable_anomaly_detection ? 1 : 0
+
   name             = "${var.project}-anomalias"
   frequency        = "DAILY"
   monitor_arn_list = [var.create_anomaly_monitor ? aws_ce_anomaly_monitor.services[0].arn : var.existing_anomaly_monitor_arn]

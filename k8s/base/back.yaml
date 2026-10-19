@@ -1,0 +1,108 @@
+# Backend Spring Boot (repo Facturacion-back).
+#
+# Config: ConfigMap "facturacion-back" generado por el overlay (SPRING_DATASOURCE_URL,
+# APP_BUCKET, AWS_REGION, APP_RETENTION).
+# Credenciales de la base: Secret "facturacion-db" que crea el workflow `up` a
+# partir del secret de RDS en Secrets Manager.
+# Credenciales de AWS: IRSA (anotación del ServiceAccount).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: facturacion-back
+  annotations:
+    eks.amazonaws.com/role-arn: REEMPLAZADO-POR-OVERLAY
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: facturacion-back
+  labels:
+    app: facturacion-back
+spec:
+  # 1 réplica: el job de purga no tiene lock distribuido todavía (mejora: ShedLock)
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: facturacion-back
+  template:
+    metadata:
+      labels:
+        app: facturacion-back
+    spec:
+      serviceAccountName: facturacion-back
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: app
+          image: facturacion-back
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: facturacion-back
+          env:
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: facturacion-db
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: facturacion-db
+                  key: password
+          # Fargate suma 256 MB y redondea: 0,5 vCPU / 768Mi se cobra como 0,5 vCPU / 1 GB (doc 02).
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: facturacion-back
+  annotations:
+    # Health check del target group del ALB
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/readiness
+spec:
+  selector:
+    app: facturacion-back
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

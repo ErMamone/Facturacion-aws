@@ -10,6 +10,17 @@ variable "project" {
   default     = "facturacion"
 }
 
+variable "expires_at" {
+  description = "Fecha/hora UTC (RFC 3339, ej. 2026-10-19T23:00:00Z) en que auto-destroy baja el entorno. Se guarda como tag de la VPC. Vacío = se destruye en la próxima corrida de auto-destroy."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.expires_at == "" || can(formatdate("YYYY", var.expires_at))
+    error_message = "expires_at tiene que ser RFC 3339, ej. 2026-10-19T23:00:00Z."
+  }
+}
+
 # --- Red -----------------------------------------------------------------------
 
 variable "vpc_cidr" {
