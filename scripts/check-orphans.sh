@@ -39,31 +39,33 @@ if [[ -n "$lb_arns" && "$lb_arns" != "None" ]]; then
 fi
 report "Load balancers" "${orphan_lbs%$'\t'}"
 
-report "NAT Gateways" "$(aws ec2 describe-nat-gateways \
-  --filter "Name=tag:project,Values=$PROJECT_TAG" "Name=state,Values=pending,available" \
-  --query 'NatGateways[].NatGatewayId' --output text)"
+nats=$(aws ec2 describe-nat-gateways   --filter "Name=tag:project,Values=$PROJECT_TAG" "Name=state,Values=pending,available"   --query 'NatGateways[].NatGatewayId' --output text)
+report "NAT Gateways" "$nats"
 
-report "Elastic IPs sin asociar" "$(aws ec2 describe-addresses \
-  --query 'Addresses[?AssociationId==null].AllocationId' --output text)"
+eips=$(aws ec2 describe-addresses --query 'Addresses[?AssociationId==null].AllocationId' --output text)
+report "Elastic IPs sin asociar" "$eips"
 
-report "ENIs disponibles" "$(aws ec2 describe-network-interfaces \
-  --filters "Name=status,Values=available" \
-  --query 'NetworkInterfaces[].NetworkInterfaceId' --output text)"
+enis=$(aws ec2 describe-network-interfaces --filters "Name=status,Values=available"   --query 'NetworkInterfaces[].NetworkInterfaceId' --output text)
+report "ENIs disponibles" "$enis"
 
 sgs=""
-for filter in \
-  "Name=tag:elbv2.k8s.aws/cluster,Values=$CLUSTER" \
-  "Name=tag-key,Values=kubernetes.io/cluster/$CLUSTER" \
-  "Name=tag:project,Values=$PROJECT_TAG"; do
+for filter in   "Name=tag:elbv2.k8s.aws/cluster,Values=$CLUSTER"   "Name=tag-key,Values=kubernetes.io/cluster/$CLUSTER"   "Name=tag:project,Values=$PROJECT_TAG"; do
   ids=$(aws ec2 describe-security-groups --filters "$filter" --query 'SecurityGroups[].GroupId' --output text)
-  [[ -n "$ids" && "$ids" != "None" ]] && sgs+="$ids"$'\t'
+  [[ -n "$ids" && "$ids" != "None" ]] && sgs+="$ids"$'	'
 done
-sgs=$(echo -n "${sgs%$'\t'}" | tr '\t' '\n' | sort -u | paste -sd $'\t' -)
+sgs=$(echo -n "${sgs%$'	'}" | tr '	' '
+' | sort -u | paste -sd $'	' -)
 report "Security groups" "$sgs"
 
-report "CloudWatch log groups" "$(aws logs describe-log-groups \
-  --log-group-name-prefix "/aws/eks/$CLUSTER" \
-  --query 'logGroups[].logGroupName' --output text)"
+# MSYS_NO_PATHCONV: Git Bash en Windows convierte "/aws/..." en una ruta local.
+logs=$(MSYS_NO_PATHCONV=1 aws logs describe-log-groups --log-group-name-prefix "/aws/eks/$CLUSTER"   --query 'logGroups[].logGroupName' --output text)
+report "CloudWatch log groups" "$logs"
+
+clusters=$(aws eks list-clusters --query "clusters[?@=='$CLUSTER']" --output text)
+report "Cluster EKS" "$clusters"
+
+rds=$(aws rds describe-db-instances --query "DBInstances[?DBInstanceIdentifier=='$PROJECT_TAG'].DBInstanceIdentifier" --output text)
+report "RDS" "$rds"
 
 echo
 if [[ "$found" -ne 0 ]]; then
