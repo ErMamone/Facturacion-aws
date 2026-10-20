@@ -97,7 +97,12 @@ jobs:
           }
           JSON
           scripts/render-k8s.sh "$RUNNER_TEMP/outputs.json"
-          kubectl kustomize k8s/overlays/demo
+          kubectl kustomize k8s/overlays/demo > "$RUNNER_TEMP/demo.yaml"
+          cm=$(yq 'select(.kind == "ConfigMap") | .metadata.name' "$RUNNER_TEMP/demo.yaml")
+          ref=$(yq 'select(.kind == "Deployment" and .metadata.name == "facturacion-back") | .spec.template.spec.containers[0].envFrom[0].configMapRef.name' "$RUNNER_TEMP/demo.yaml")
+          ns=$(yq 'select(.kind == "ConfigMap") | .metadata.namespace' "$RUNNER_TEMP/demo.yaml")
+          echo "configmap=$cm ref=$ref namespace=$ns"
+          [[ "$cm" == "$ref" && "$ns" == "facturacion" ]]
 
   trivy:
     name: trivy config
