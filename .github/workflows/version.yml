@@ -1,0 +1,56 @@
+name: version
+
+on:
+  pull_request:
+    branches: [prd]
+  push:
+    branches: [prd]
+
+permissions: {}
+
+jobs:
+  check:
+    name: version
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Mayor que el último release
+        run: |
+          set -euo pipefail
+          version=$(tr -d '[:space:]' < version.txt)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error file=version.txt::Versión inválida: $version (formato X.Y.Z)"; exit 1; }
+          last=$(git tag -l 'v*' | sed 's/^v//' | sort -V | tail -1)
+          last=${last:-0.0.0}
+          if [[ "$version" == "$last" || "$(printf '%s\n%s\n' "$last" "$version" | sort -V | tail -1)" != "$version" ]]; then
+            echo "::error file=version.txt::La versión $version tiene que ser mayor que la del último release ($last)"
+            exit 1
+          fi
+          echo "$last -> $version"
+
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Tag y release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(tr -d '[:space:]' < version.txt)
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::warning::v$version ya existe: no se crea release"
+            exit 0
+          fi
+          gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --generate-notes

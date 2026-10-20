@@ -6,11 +6,11 @@ Asume que ya hiciste [INSTALACION.md](INSTALACION.md) hasta el paso 4 (bootstrap
 ## Visión general
 
 ```
-Facturacion-back ──push prd──► CI ──(aprobás)──► ECR facturacion-back:<sha> y :latest
-Facturacion-web  ──push prd──► CI ──(aprobás)──► ECR facturacion-web:<sha> y :latest
+Facturacion-back ──push prd──► CI ──► ECR facturacion-back:<sha> y :latest
+Facturacion-web  ──push prd──► CI ──► ECR facturacion-web:<sha> y :latest
 
 Facturacion-aws
-  up            (botón, aprobás) ──► tofu apply infra/env ──► kubectl apply k8s/ ──► URL del ALB
+  up            (botón)          ──► tofu apply infra/env ──► kubectl apply k8s/ ──► URL del ALB
   down          (botón)          ──► borra Ingress ──► espera ALB ──► tofu destroy ──► check-orphans
   auto-destroy  (cada hora)      ──► si venció expires-at ──► mismo teardown que down
   infra-ci      (push/PR)        ──► fmt, validate, tflint, shellcheck, kustomize, trivy
@@ -18,12 +18,14 @@ Facturacion-aws
 
 Todos los workflows asumen el rol `gha-facturacion` por OIDC. No hay access keys en GitHub.
 
-| Repo | Environment | Aprobación | Para qué |
-|---|---|---|---|
-| Facturacion-aws | `demo` | Sí | `up` |
-| Facturacion-aws | `teardown` | No (solo rama `prd`) | `down`, `auto-destroy` |
-| Facturacion-back | `demo` | Sí | push de imagen a ECR |
-| Facturacion-web | `demo` | Sí | push de imagen a ECR |
+| Repo | Environment | Para qué |
+|---|---|---|
+| Facturacion-aws | `demo` | `up` |
+| Facturacion-aws | `teardown` | `down`, `auto-destroy` |
+| Facturacion-back | `demo` | push de imagen a ECR |
+| Facturacion-web | `demo` | push de imagen a ECR |
+
+Todos limitados a la rama `prd`. Sin reviewer: solo quien tiene escritura en el repo puede lanzar workflows, y la trust policy exige el environment.
 
 ## 1. Configuración de GitHub (una sola vez)
 
@@ -37,10 +39,8 @@ Todos los workflows asumen el rol `gha-facturacion` por OIDC. No hay access keys
 **Settings → Environments:**
 
 1. `demo`
-   - Required reviewers: vos.
    - Deployment branches: *Selected branches* → `prd`.
 2. `teardown`
-   - **Sin** reviewers (si no, el auto-destroy se queda esperando y no te protege).
    - Deployment branches: *Selected branches* → `prd`.
 
 **Settings → Secrets and variables → Actions → Variables** (a nivel repo):
@@ -52,7 +52,7 @@ Todos los workflows asumen el rol `gha-facturacion` por OIDC. No hay access keys
 
 ### Facturacion-back y Facturacion-web
 
-**Settings → Environments → `demo`**: Required reviewers vos, Deployment branches `prd`.
+**Settings → Environments → `demo`**: Deployment branches `prd`.
 Dentro del environment, **Environment variables**:
 
 | Variable | back | web |
@@ -66,7 +66,7 @@ Dentro del environment, **Environment variables**:
 `up` no construye imágenes: despliega las que ya están en ECR. Por eso, antes del primer `up`:
 
 1. En Facturacion-back: PR `dev` → `prd` y merge.
-2. El CI corre los tests y pide aprobación para el job `imagen` (environment `demo`). Aprobás.
+2. El CI corre los tests y el job `imagen` (environment `demo`).
 3. La imagen queda en ECR como `facturacion-back:<sha>` y `facturacion-back:latest`.
 4. Lo mismo en Facturacion-web.
 
@@ -88,16 +88,17 @@ aws ecr describe-images --repository-name facturacion-back --query "imageDetails
    | `retention` | `PT10M` | Vida de cada factura (para ver la purga en vivo) |
    | `back_tag` / `web_tag` | `latest` | Tag de cada imagen en ECR |
 
-3. Aprobás el deployment a `demo`.
-4. Esperás unos 25 minutos (EKS es lo más lento; anotá el tiempo real, doc 01).
-5. En el **Summary** de la corrida aparecen la URL (`http://facturacion-....elb.amazonaws.com`) y la hora del auto-destroy.
+3. Esperás unos 25 minutos (EKS es lo más lento; anotá el tiempo real, doc 01).
+4. En el **Summary** de la corrida aparecen la URL (`http://facturacion-....elb.amazonaws.com`) y la hora del auto-destroy.
 
 Qué hace, en orden:
 1. Valida inputs y verifica que las imágenes existan en ECR (falla antes de gastar plata).
 2. `tofu apply` de `infra/env` con `allowed_cidrs` y `expires_at = ahora + ttl_hours`.
 3. Crea el Secret `facturacion-db` con usuario y password del secret de RDS.
 4. Genera el overlay de Kustomize con los outputs de tofu (`scripts/render-k8s.sh`) y aplica `k8s/`.
-5. Espera los rollouts, el ALB y que responda `/` y `/api`.
+5. Espera los rollouts.
+6. Verifica Flyway: un Job consulta `flyway_schema_history` en RDS y falla si hay migraciones fallidas o ninguna aplicada. La lista queda en el Summary.
+7. Espera el ALB y que responda `/` y `/api`.
 
 **Para extender el tiempo:** volvé a correr `up` con otro `ttl_hours`. `tofu apply` no cambia nada salvo el tag `expires-at`, y el deploy es idempotente.
 
@@ -105,7 +106,7 @@ Qué hace, en orden:
 
 ## 4. Bajar el entorno (`down`)
 
-**Actions → down → Run workflow** (rama `prd`). No pide aprobación.
+**Actions → down → Run workflow** (rama `prd`).
 
 Hace (`scripts/teardown.sh`):
 1. `kubectl delete ingress --all -n facturacion` y espera a que el LB Controller borre el ALB.
@@ -153,3 +154,17 @@ kubectl logs -n facturacion deploy/facturacion-back
 - Medir tiempos de `up` y `down` (doc 01) y el costo real contra el doc 02.
 - Achicar los permisos de `gha-facturacion` con IAM Access Analyzer (doc 03).
 - Revisar los hallazgos de Trivy y pasarlo a bloqueante.
+
+## 9. Versionado
+
+Cada merge a `prd` tiene que subir la versión. El workflow `version` corre en los PRs a `prd` y falla si la versión no es mayor que la del último release (tag `v*`).
+
+| Repo | Dónde se cambia |
+|---|---|
+| Facturacion-aws | `version.txt` |
+| Facturacion-back | `<version>` del proyecto en `pom.xml` |
+| Facturacion-web | `"version"` en `package.json` (`npm version patch --no-git-tag-version` también actualiza el lock) |
+
+Formato `X.Y.Z`, sin sufijos. Al mergear, el workflow crea el tag `vX.Y.Z` y el GitHub Release; en back y web la imagen también se publica como `facturacion-back:X.Y.Z` / `facturacion-web:X.Y.Z`, usable como `back_tag` / `web_tag` en `up`.
+
+Para que bloquee el merge: **Settings → Branches → regla de `prd` → Require status checks to pass → `version`**.
